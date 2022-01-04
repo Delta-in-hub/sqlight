@@ -53,24 +53,27 @@ The **atomic CAS(Compare and Swap)** is the quintessence of any lock implementat
 
 
 
-### `std::call_once` `static`
-在C++11标准中：初始化及定义完全在一个线程中发生，并且没有其他线程可在初始化完成前对其进行处理，条件竞争终止于初始化阶段，这样比在之后再去处理好的多。
+
+
+---
 
 
 
-## 线程间共享数据 (mutex)
+## 线程间共享数据
 
-### `std::lock_guard vs std::scoped_lock vs std::unique_lock`
+### mutex
+
+#### `std::lock_guard vs std::scoped_lock vs std::unique_lock`
 
 The `scoped_lock` is a strictly superior version of `lock_guard` that locks an arbitrary number of mutexes all at once.
 
 A **unique_lock can be created without immediately locking**, can unlock at any point in its existence, and can transfer ownership of the lock from one instance to another.
 
-###  lock a  std::mutex twice from the same thread without unlocking in between, you get undefined behavior.
+####  lock a  std::mutex twice from the same thread without unlocking in between, you get undefined behavior.
 
 > https://stackoverflow.com/questions/11173532/why-is-locking-a-stdmutex-twice-undefined-behaviour
 
-### std::lock()
+#### std::lock()
 
 > https://stackoverflow.com/questions/18520983/is-stdlock-ill-defined-unimplementable-or-useless
 
@@ -84,7 +87,7 @@ Following the back-off (unlocking `a` through `e`), the list to lock would be ch
 
 
 
-### 防范死锁
+#### 防范死锁
 
 1. 每个线程最好只持有一个锁，
 
@@ -172,7 +175,193 @@ Following the back-off (unlocking `a` through `e`), the list to lock would be ch
 
 
 
-## 线程间共享数据 (其他方式)
+### 在初始化过程中保护共享数据
+
+`std::once_flag` 于`std::call_once()` 配合
+
+C++11之后,static变量初始化仅仅会在某一线程上发生.
+
+-----
+
+[**double-checked locking pattern** 的问题](https://stackoverflow.com/questions/945232/whats-wrong-with-this-fix-for-double-checked-locking?rq=1)
+
+The problem is that a second thread may see instance is non-null and try to return it before the first-thread has constructed it. 
+
+
+
+### 共享锁 shared_mutex
+
+读锁`std::shared_lock<std::shared_mutex>` ,写锁`std::lock_guard<std::shared_mutex> ...etc` 
+
+`std::shared_mutex_timed`
+
+## 并发操作的同步
+
+### 条件变量 `std::condition_variable`
+
+`std::condition_variable`仅限于`std::mutex`配合使用.
+
+`std::condition_variable_any`可以和充当mutex的任何类型使用.
+
+#### condition_variable::wait()
+
+若当前线程未锁定 [lock.mutex()](https://zh.cppreference.com/w/cpp/thread/unique_lock/mutex) ，则调用此函数是未定义行为。
+
+若 [lock.mutex()](https://zh.cppreference.com/w/cpp/thread/unique_lock/mutex) 与所有其他当前等待在同一条件变量上的线程所用的互斥不相同，则调用此函数是未定义行为。
+
+### 构建线程安全队列
+
+`mutable`
+
+1. If you have a **const** reference or pointer to an object, you cannot modify that object in any way **except** when and how it is marked `mutable`.Because,using `const_cast` to modify a part of a `const` object yields undefined behaviour. 
+
+2. Allowing the variable to be modified by a **const function**.
+
+3. Since c++11 `mutable` can be used on a lambda to denote that things captured by value are modifiable (they aren't by default):
+
+```c++
+int x = 0;
+auto f1 = [=]() mutable {x = 42;};  // OK
+auto f2 = [=]()         {x = 42;};  // Error: a by-value capture cannot be modified in a non-mutable lambda
+```
+
+
+
+
+
+```c++
+#include <mutex>
+#include <condition_variable>
+#include <queue>
+#include <memory>
+
+template <typename T>
+class threadsafe_queue
+{
+private:
+    mutable std::mutex mut;
+    std::queue<T> data_queue;
+    std::condition_variable data_cond;
+
+public:
+    threadsafe_queue()
+    {
+    }
+    threadsafe_queue(threadsafe_queue const &other)
+    {
+        std::lock_guard<std::mutex> lk(other.mut);
+        data_queue = other.data_queue;
+    }
+
+    void push(T new_value)
+    {
+        std::lock_guard<std::mutex> lk(mut);
+        data_queue.push(new_value);
+        data_cond.notify_one();
+    }
+
+    void wait_and_pop(T &value)
+    {
+        std::unique_lock<std::mutex> lk(mut);
+        data_cond.wait(lk, [this]
+                       { return !data_queue.empty(); });
+        value = data_queue.front();
+        data_queue.pop();
+    }
+
+    std::shared_ptr<T> wait_and_pop()
+    {
+        std::unique_lock<std::mutex> lk(mut);
+        data_cond.wait(lk, [this]()
+                       { return !data_queue.empty(); });
+        std::shared_ptr<T> res(std::make_shared<T>(data_queue.front()));
+        data_queue.pop();
+        return res;
+    }
+
+    bool try_pop(T &value)
+    {
+        std::lock_guard<std::mutex> lk(mut);
+        if (data_queue.empty())
+            return false;
+        value = data_queue.front();
+        data_queue.pop();
+        return true;
+    }
+
+    std::shared_ptr<T> try_pop()
+    {
+        std::lock_guard<std::mutex> lk(mut);
+        if (data_queue.empty())
+            return std::shared_ptr<T>();
+        std::shared_ptr<T> res(std::make_shared<T>(data_queue.front()));
+        data_queue.pop();
+        return res;
+    }
+
+    bool empty() const
+    {
+        std::lock_guard<std::mutex> lk(mut);
+        return data_queue.empty();
+    }
+};
+```
+
+在`notify_one()`之前,释放掉锁是一个常见的优化.
+
+> The notifying thread does not need to hold the lock on the same  mutex as the one held by the waiting thread(s); in fact doing so is a **pessimization**, since the notified thread would immediately block again, waiting for the notifying thread to release the lock.
+
+`notify_one()`与`notify_all()` : `notify_one()`不存在锁竞争
+
+
+
+### `std::future`
+
+使用`future`等待一次性事件发生
+
+创建`future`的三种方法:
+
+1. `std::async()`
+
+   ​	`std::launch::deferred` : 没有创建新线程,仅为惰性求值.
+
+   ​	`std::launch::async` : 创建新线程,异步求值.
+
+2. `std::packaged_task<>`
+   它连接了`future`对象与函数,`std::packaged_task<>`执行时会调用关联的函数,并将返回值保存为`future`的内部数据,并令`future`准备就绪.
+
+3. `std::promise`
+   可以实现如下机制: 等待数据的线程在`future`上阻塞,而提供数据的线程的线程利用相配的`promise`的`set_value()`设定关联的值,使`future`准备就绪.
+
+   作为1,2的底层
+
+`std::future`也可以保存异常,在`get()`抛出保存在其中的异常.
+
+
+
+### `std::shared_future`
+
+`std::future`问题在于只允许一个线程等待结果,`get()`仅能被有效调用唯一一次,因其会进行移动操作.(若为 `future<T&>` 模板特化,则返回左值引用).`std::future`对象仅能被移动.
+
+
+
+`std::shared_future::get()`默认返回const引用,但本身不保证线程安全.
+若每个线程通过其自身的 `shared_future` 对象副本访问，则从多个线程访问同一共享状态是安全的。
+
+
+
+>  So we know that calls to `global_sf.get()` in different threads are **potentially concurrent** unless you accompany them with additional synchronization (e.g. a mutex). But we also know that calls to `global_sf.get()` in different threads do **not conflict**, because it is a `const` method and hence forbidden from modifying objects accessible from multiple threads, including `*this`. So the definition of a data race (unsequenced, potentially concurrent conflicting actions) is not satisfied, the program does not contain a data race.  https://stackoverflow.com/a/41416686/11803107
+
+```c++
+void worker_thread()
+{
+    // The most correct way is as followed.
+    auto local_sf = global_sf; // <-- unsynchronized access of global_sf here
+    const bigdata *ptr = local_sf.get();     // thread safe access to shared state
+}
+```
+
+
 
 
 
