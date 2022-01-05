@@ -197,7 +197,7 @@ The problem is that a second thread may see instance is non-null and try to retu
 
 ## 并发操作的同步
 
-### 条件变量 `std::condition_variable`
+###  `std::condition_variable`
 
 `std::condition_variable`仅限于`std::mutex`配合使用.
 
@@ -209,7 +209,7 @@ The problem is that a second thread may see instance is non-null and try to retu
 
 若 [lock.mutex()](https://zh.cppreference.com/w/cpp/thread/unique_lock/mutex) 与所有其他当前等待在同一条件变量上的线程所用的互斥不相同，则调用此函数是未定义行为。
 
-### 构建线程安全队列
+#### 构建线程安全队列
 
 `mutable`
 
@@ -317,6 +317,10 @@ public:
 
 ### `std::future`
 
+使用`future`一个线程依赖于另一个线程的计算结果,却不必显式的访问共享数据.
+
+
+
 使用`future`等待一次性事件发生
 
 创建`future`的三种方法:
@@ -363,9 +367,250 @@ void worker_thread()
 
 
 
+### 限时等待
+
+
+
+`_for`为后缀
+
+`_until`为后缀
+
+
+
+#### 时间库 `std::chrono`
+
+**The Unix Time**
+
+从[UTC](https://zh.wikipedia.org/wiki/協調世界時)1970年1月1日0时0分0秒起至现在的总秒数，不考虑[闰秒](https://zh.wikipedia.org/wiki/閏秒).
+
+故`epoch`一般指1970.1.1 00:00
+
+C++20前，并没有对这个时间点的起始做出规定，从C++20开始，这个时间被确定为Unix Time。不过在20之前，大部分编译器的实现都使用Unix时间（Unix Time）作为这个时钟源的纪元（epoch）起点，因此一般来说可以将其视为Unix时间戳进行使用（对于20版本以前能确认一下当然也是更好的）。
 
 
 
 
 
+**`std::ratio`**
+
+常用来表示一个tick表示多少秒,即tick period.
+
+```c++
+  template <intmax_t _Num, intmax_t _Den = 1> //即分母默认为1
+  struct ratio{}
+```
+
+
+
+`ratio<x,y>`表示 $\frac{x}{y}$ .
+
+==SI prefixes==
+
+<img src="C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20220105201924353.png" alt="image-20220105201924353" style="zoom: 80%;" />
+
+```c++
+  typedef ratio<1, 1000000000000000000> atto;
+  typedef ratio<1, 1000000000000000> femto;
+  typedef ratio<1, 1000000000000> pico; //ps 皮秒
+  typedef ratio<1, 1000000000> nano; //ns（纳秒，十亿分之一秒）
+  typedef ratio<1, 1000000> micro; //μs（微秒，百万分之一秒）
+  typedef ratio<1, 1000> milli; //ms（毫秒，千分之一秒）
+  typedef ratio<1, 100> centi;
+  typedef ratio<1, 10> deci;
+  typedef ratio<10, 1> deca;
+  typedef ratio<100, 1> hecto;
+  typedef ratio<1000, 1> kilo;
+  typedef ratio<1000000, 1> mega;
+  typedef ratio<1000000000, 1> giga;
+  typedef ratio<1000000000000, 1> tera;
+  typedef ratio<1000000000000000, 1> peta;
+  typedef ratio<1000000000000000000, 1> exa;
+```
+
+**时长类`std::chrono::duration<>`**
+
+模板接受两个参数,第一个表示计时单元数量的类型,第二个表示一个计时单元代表多少秒.
+
+```c++
+#define _GLIBCXX_CHRONO_INT64_T int64_t
+
+/// nanoseconds
+using nanoseconds = duration<_GLIBCXX_CHRONO_INT64_T, nano>;
+
+/// microseconds
+using microseconds = duration<_GLIBCXX_CHRONO_INT64_T, micro>;
+
+/// milliseconds
+using milliseconds = duration<_GLIBCXX_CHRONO_INT64_T, milli>;
+
+/// seconds
+using seconds = duration<_GLIBCXX_CHRONO_INT64_T>;
+
+/// minutes
+using minutes = duration<_GLIBCXX_CHRONO_INT64_T, ratio<60>>;
+
+/// hours
+using hours = duration<_GLIBCXX_CHRONO_INT64_T, ratio<3600>>;
+
+/// days
+using days = duration<_GLIBCXX_CHRONO_INT64_T, ratio<86400>>;
+
+/// weeks
+using weeks = duration<_GLIBCXX_CHRONO_INT64_T, ratio<604800>>;
+
+/// years
+using years = duration<_GLIBCXX_CHRONO_INT64_T, ratio<31556952>>;
+
+/// months
+using months = duration<_GLIBCXX_CHRONO_INT64_T, ratio<2629746>>;
+```
+
+时间段显式转化`std::duration_case<>()`
+
+
+
+**时间点`std::chrono::time_point<>`**
+
+模板第一个参数指明参考的时钟,第二个参数表明计时单元(`std::chrono::duration<>`) 
+
+时间点是一个时间跨度,开始于epoch,终止于当前时间点.跨度的值表明某具体时长的倍数.
+
+```c++
+template<
+    class Clock,
+    class Duration = typename Clock::duration
+>class time_point;
+
+```
+
+`time_point_cast<>()`进行转换
+
+**时钟类**
+
+时钟提供几类关键信息:
+
+1. 是否为steady clock(计时速率恒定且无法调整)
+   `system_clock`不是恒稳时钟,它可以被调整,两次调用`now()`可能后者返回值早于前一个.
+2. 计时单元的长度( tick period )
+3. 时间值的类型
+4. 获取当前时间
+
+```c++
+struct system_clock
+{
+    typedef chrono::nanoseconds duration;  //计时单元为 nanoseconds
+    typedef duration::rep rep;
+    typedef duration::period period;
+    typedef chrono::time_point<system_clock, duration> time_point; //时间值的类型
+    static constexpr bool is_steady = false;  //是否为stead_clock
+    //...
+}
+```
+
+成员函数`from_time_t` `to_time_t`将时钟的时间点类型与`time_t`类型相互转化.
+
+
+
+> https://zhuanlan.zhihu.com/p/414702182
+
+时间的定义:
+
+1. 人们对时间最直观的感受就是太阳的东升西落，这就引出了世界时（UT1）简单理解这个就是基于地球自转所定义的时间。即基于天文观测确定的世界时.
+2. 原子时（TAI），以铯原子跃迁周期作为基准定义时间长度.
+   *问题就在于地球自转的周期实际上并没有那么稳定，如果使用  TAI，就会出现太阳在12点零几秒才到达了当天的最高点，对于日常使用实际是非常不便的。这种误差还会随着时间推移不断积累。*
+3. 协调世界时，即UTC时间。UTC时间以原子时作为计时基础，同时通过添加或减少闰秒（leap second）的方式与UT进行同步。我们日常使用的时间，实际就是UTC时间。
+
+chrono库中`utc_clock`提供的就是UTC时间(not supported by gcc)，而`system_clock`提供的时间并不包含闰秒。因此在打印秒数的时候，二者会有一定的差距.
+
+
+
+### 同步操作简化代码
+
+#### 使用`future`进行函数式编程
+
+串行/并行的快速排序
+
+并行版本反而更慢了.
+
+```c++
+#include <bits/stdc++.h>
+
+using namespace std;
+
+template <typename T>
+list<T> sequential_quick_sort(list<T> input)
+{
+    if (input.empty())
+        return input;
+    list<T> result;
+    result.splice(result.begin(), input, input.begin());
+    auto &&pivot = result.front();
+    auto divide_point = partition(input.begin(), input.end(), [&pivot](const T &t)
+                                  { return t < pivot; });
+    list<T> lower_part;
+    lower_part.splice(lower_part.end(), input, input.begin(), divide_point);
+    auto new_lower = sequential_quick_sort(move(lower_part));
+    auto new_higher = sequential_quick_sort(move(input));
+    result.splice(result.begin(), new_lower);
+    result.splice(result.end(), new_higher);
+    return result;
+}
+
+template <typename T>
+list<T> parallel_quick_sort(list<T> input)
+{
+    if (input.empty())
+        return input;
+    list<T> result;
+    result.splice(result.begin(), input, input.begin());
+    auto &&pivot = result.front();
+    auto divide_point = partition(input.begin(), input.end(), [&pivot](const T &t)
+                                  { return t < pivot; });
+    list<T> lower_part;
+    lower_part.splice(lower_part.end(), input, input.begin(), divide_point);
+
+    auto new_lower = sequential_quick_sort(move(lower_part));
+    //auto new_higher = sequential_quick_sort(move(input));
+    auto new_higher = async(&parallel_quick_sort<T>, move(input));
+    result.splice(result.begin(), new_lower);
+    result.splice(result.end(), new_higher.get());
+    return result;
+}
+
+signed main(void)
+{
+    srand(time(0));
+    list<int> l;
+    for (int i = 0; i < 200000; i++)
+    {
+        l.emplace_back(rand());
+    }
+    auto start = chrono::high_resolution_clock::now();
+    auto r = sequential_quick_sort(l);
+    auto end = chrono::high_resolution_clock::now();
+    cout << (end - start).count() << endl;
+    int pre = -1;
+    for (auto &&i : r)
+    {
+        assert(pre <= i);
+        pre = i;
+    }
+
+    start = chrono::high_resolution_clock::now();
+    r = parallel_quick_sort(l);
+    end = chrono::high_resolution_clock::now();
+    cout << (end - start).count() << endl;
+    pre = -1;
+    for (auto &&i : r)
+    {
+        assert(pre <= i);
+        pre = i;
+    }
+    return 0;
+}
+```
+
+
+
+## 内存模型与原子操作
 
