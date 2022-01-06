@@ -1,14 +1,11 @@
 cmake_minimum_required(VERSION 3.0.0)
 project(sqlight VERSION 0.0.1)
-message(${PROJECT_NAME})
 
-add_executable(sqlightcli main.cpp)
-target_compile_features(sqlightcli PRIVATE cxx_std_17)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
+add_subdirectory(src)
 
-
-find_package(fmt)
-# find_package(Botan2)
-
-target_link_libraries(sqlightcli fmt::fmt pthread)
+# CTest related
+enable_testing()
+add_subdirectory(test)
