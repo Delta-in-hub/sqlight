@@ -1,6 +1,6 @@
 #include "fmt/format.h"
 #include "utf8.h"
-
+#include <ciso646>
 
 int main(int argc, char **argv)
 {
@@ -9,7 +9,6 @@ int main(int argc, char **argv)
 #if defined _WIN32
     SetConsoleOutputCP(CP_UTF8);
 #endif
-
 
     string u8 = u8"Ελληνικά -- Español -- 中国 --  ĐĄßĞĝ ";
     fmt::print("{}\n", u8);

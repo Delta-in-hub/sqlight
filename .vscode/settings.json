@@ -4,6 +4,7 @@
         "cstdint": "cpp",
         "string": "cpp",
         "iostream": "cpp",
-        "thread": "cpp"
+        "thread": "cpp",
+        "ciso646": "cpp"
     }
 }

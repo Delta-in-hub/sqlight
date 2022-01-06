@@ -1,3 +1,32 @@
+# sqlight
+sqlight is an light version of sqlite.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## gitignore
 `bin` matches any files or directories named 'bin'.
 
