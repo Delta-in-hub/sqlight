@@ -333,7 +333,8 @@ public:
 
 2. `std::packaged_task<>`
    它连接了`future`对象与函数,`std::packaged_task<>`执行时会调用关联的函数,并将返回值保存为`future`的内部数据,并令`future`准备就绪.
-
+   `std::packaged_task<>` + `std::thread`就成了`std::async`
+   
 3. `std::promise`
    可以实现如下机制: 等待数据的线程在`future`上阻塞,而提供数据的线程的线程利用相配的`promise`的`set_value()`设定关联的值,使`future`准备就绪.
 
@@ -613,4 +614,6 @@ signed main(void)
 
 
 ## 内存模型与原子操作
+
+
 
