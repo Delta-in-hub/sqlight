@@ -8,8 +8,15 @@ include_directories(include)
 
 add_subdirectory(extern/fmt)
 
+if(WIN32)
+  set(thread "")
+else()
+  set(thread pthread)
+endif(WIN32)
+
+
 add_executable(sqlightcli main.cc src/bitwise.cc src/utf8.cc)
-target_link_libraries(sqlightcli fmt::fmt)
+target_link_libraries(sqlightcli fmt::fmt ${thread})
 
 
 enable_testing()
@@ -25,4 +32,5 @@ target_link_libraries(
   sqlighttest
   gtest_main
   fmt::fmt
+  ${thread}
 )
