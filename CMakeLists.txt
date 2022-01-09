@@ -22,12 +22,12 @@ target_link_libraries(sqlightcli fmt::fmt ${thread})
 enable_testing()
 add_subdirectory(extern/gtest)
 include(GoogleTest)
-include_directories(include)
 
 add_executable(
   sqlighttest
   test/main.cc
   src/bitwise.cc
+  src/pagedFile.cc
 )
 target_link_libraries(
   sqlighttest
