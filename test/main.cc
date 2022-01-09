@@ -1,6 +1,7 @@
 #include "bitwise.h"
 #include "fmt/color.h"
 #include "fmt/format.h"
+#include "pagedFile.h"
 #include <ciso646>
 #include <gtest/gtest.h>
 #include <thread>
@@ -40,6 +41,42 @@ TEST(BitMap, test)
     printHex(&arr, sizeof(arr));
 
     EXPECT_TRUE(bmap.getLength() == sizeof(arr) * 8);
+}
+
+TEST(PagedFile, test)
+{
+    using namespace PagedFile;
+    FileManager fm;
+    char path[] = "./gtestPagedFiletest38963765中文💖😂.bin";
+
+    EXPECT_TRUE(fm.isFile(path).empty());
+
+    fm.createFile(path);
+    EXPECT_TRUE(not fm.isFile(path).empty());
+
+    int fd = fm.openFile(path);
+    PageManager pm;
+    auto page = pm.getPage({fd, 0});
+    // printHex(page->_data, 32);
+    memset(page->_data, 1, 4096);
+    // printHex(page->_data, 32);
+    page->_dirty = true;
+
+    fm.closeFile(fd, pm);
+
+    EXPECT_TRUE(not fm.isFile(path).empty());
+
+    fd = fd = fm.openFile(path);
+
+    page = pm.getPage({fd, 0});
+    char buf[4096];
+    memset(buf, 1, 4096);
+    EXPECT_TRUE(memcmp(page->_data, buf, 4096) == 0);
+
+    fm.closeFile(fd, pm);
+
+    fm.deleteFile(path);
+    EXPECT_TRUE(fm.isFile(path).empty());
 }
 
 int main(int argc, char **argv)
