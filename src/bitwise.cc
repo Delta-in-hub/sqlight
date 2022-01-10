@@ -1,5 +1,4 @@
 #include "bitwise.h"
-#include <ciso646>
 
 void printHex(const void *arr, size_t len)
 {

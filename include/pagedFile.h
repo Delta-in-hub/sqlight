@@ -135,7 +135,7 @@ class PageManager
             _hashm[p] = _usedPage.begin();
             auto nread = readFromDisk(ans);
             assert(nread == 0 or nread == PAGESIZE);
-            if (nread == 0) //beyond eof
+            if (nread == 0) // beyond eof
                 memset(ans->_data, 0, PAGESIZE);
         }
         return ans;
@@ -173,6 +173,7 @@ class PageManager
             }
             _usedPage.clear();
             _hashm.clear();
+            _hashm.reserve(0);
         }
     }
 
@@ -196,6 +197,15 @@ class PageManager
         }
     }
 };
+
+/**
+ * @brief Get a Page Manager object for fiel cache.
+ * One PageManager can manage more than one file.
+ * @return PageManager& reference
+ */
+PageManager &getPageManager();
+
+void destoryAllPageManager();
 
 /**
  * @brief handle file through os.
@@ -267,8 +277,6 @@ class FileManager
         pm.flushAllByFd(fd);
         _path2fd.erase(pos->second);
         _fd2path.erase(pos);
-        // Something
-        // ...
         close(fd);
     }
     static void createFile(std::string_view path)

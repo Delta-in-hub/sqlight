@@ -25,7 +25,7 @@ constexpr unsigned ceil(const unsigned a, const unsigned b)
  */
 constexpr unsigned BYTEINBITS = 8;
 
-constexpr uint8_t MSB = 0b10000000; // most significant bit
+constexpr uint8_t MSB = 0b10000000; // most significant bit of byte
 
 /**
  * @brief Variable-length bits array.
