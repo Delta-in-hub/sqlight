@@ -54,6 +54,8 @@ TEST(PagedFile, test)
     fm.createFile(path);
     EXPECT_TRUE(not fm.isFile(path).empty());
 
+    Print("{}\n", fm.isFile(path));
+
     int fd = fm.openFile(path);
     PageManager pm;
     auto page = pm.getPage({fd, 0});

@@ -82,11 +82,11 @@ class PageManager
         }
     }
 
-    void readFromDisk(Page *p)
+    ssize_t readFromDisk(Page *p)
     {
         lseek(p->_id.fd, p->_id.pageNum * PAGESIZE, SEEK_SET);
         auto nr = read(p->_id.fd, p->_data, PAGESIZE);
-        assert(nr == PAGESIZE); // ! ! ! EOF
+        return nr;
     }
 
   public:
@@ -107,13 +107,16 @@ class PageManager
         flushAll(false);
     }
 
-    Page *getPage(const Pid &p, bool fromDisk = false)
+    Page *getPage(const Pid &p)
     {
         Page *ans = nullptr;
         auto pos = _hashm.find(p);
         if (pos != _hashm.end())
         {
             ans = *(pos->second);
+            _usedPage.erase(pos->second);
+            _usedPage.push_front(ans);
+            _hashm[p] = _usedPage.begin();
         }
         else
         {
@@ -130,10 +133,7 @@ class PageManager
             ans->_id = p;
             _usedPage.push_front(ans);
             _hashm[p] = _usedPage.begin();
-            if (fromDisk)
-            {
-                readFromDisk(ans);
-            }
+            readFromDisk(ans);
         }
         return ans;
     }
@@ -170,7 +170,6 @@ class PageManager
             }
             _usedPage.clear();
             _hashm.clear();
-            _hashm.reserve(0);
         }
     }
 
@@ -179,15 +178,18 @@ class PageManager
         auto i = _usedPage.begin();
         while (i != _usedPage.end())
         {
-            if ((*i)->_id.fd != fd)
+            if ((*i)->_id.fd == fd)
             {
-                ++i;
-                continue;
+                writeToDisk(*i);
+                if (del)
+                {
+                    _hashm.erase((*i)->_id);
+                    _unusedPage.emplace(*i);
+                    i = _usedPage.erase(i);
+                    continue;
+                }
             }
-            writeToDisk(*i);
-            _hashm.erase((*i)->_id);
-            _unusedPage.emplace(*i);
-            i = _usedPage.erase(i);
+            ++i;
         }
     }
 };
@@ -200,6 +202,7 @@ class FileManager
 {
 
   private:
+    // ? maybe useless
     static std::unordered_map<std::string, int> _path2fd;
     static std::unordered_map<int, std::string> _fd2path;
 
