@@ -3,24 +3,15 @@
 robin_hood::unordered_map<std::string, int> PagedFile::FileManager::_path2fd;
 robin_hood::unordered_map<int, std::string> PagedFile::FileManager::_fd2path;
 
-static std::vector<PagedFile::PageManager *> vec;
+static std::vector<std::unique_ptr<PagedFile::PageManager>> vec;
 
-PagedFile::PageManager &PagedFile::getPageManager()
+PagedFile::PageManager *PagedFile::getPageManager()
 {
     if (vec.empty())
     {
-        auto p = new PageManager;
-        assert(p);
-        vec.emplace_back(p);
+        auto p = std::make_unique<PagedFile::PageManager>();
+        assert(p.get() != nullptr);
+        vec.emplace_back(move(p));
     }
-    return *vec.front();
-}
-
-void PagedFile::destoryAllPageManager()
-{
-    for (auto &&i : vec)
-    {
-        delete i;
-    }
-    vec.clear();
+    return vec.front().get();
 }

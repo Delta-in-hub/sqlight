@@ -1,6 +1,7 @@
 #if !defined(__SQLIGHT_PAGEDFILE__)
 #define __SQLIGHT_PAGEDFILE__
 
+#include "sqlight.h"
 #include <cassert>
 #include <cstdlib>
 #include <fcntl.h>
@@ -16,10 +17,6 @@
 
 namespace PagedFile
 {
-
-constexpr unsigned PAGESIZE = 4096; // A page is 4096 bytes.
-
-constexpr unsigned CACHESIZE = 4096 * 2; // Cache could contains CACHESIZE pages for maximum.
 
 struct Pid
 {
@@ -203,7 +200,7 @@ class PageManager
  * One PageManager can manage more than one file.
  * @return PageManager& reference
  */
-PageManager &getPageManager();
+PageManager *getPageManager();
 
 void destoryAllPageManager();
 

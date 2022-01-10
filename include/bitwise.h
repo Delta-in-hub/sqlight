@@ -1,6 +1,7 @@
 #if !defined(__SQLIGHT_BITWISE__)
 #define __SQLIGHT_BITWISE__
 #include "fmt/format.h"
+#include "sqlight.h"
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -23,7 +24,6 @@ constexpr unsigned ceil(const unsigned a, const unsigned b)
 /**
  * @brief 1 Bytes == 8 bits
  */
-constexpr unsigned BYTEINBITS = 8;
 
 constexpr uint8_t MSB = 0b10000000; // most significant bit of byte
 
@@ -48,6 +48,7 @@ class BitMap
     }
 
   public:
+    BitMap() = delete;
     /**
      * @brief Construct a new Bit Map object
      *
@@ -58,6 +59,24 @@ class BitMap
     {
         ;
     }
+
+    /**
+     * @brief get the first position of (bit == 0) from pos
+     *
+     * @param pos start position inclusve
+     * @return if all bit is 1, return UINTMAX(-1), else return position
+     */
+    uint32_t nextBit(uint32_t pos = 0)
+    {
+        while (pos < _sizeInBytes * BYTEINBITS)
+        {
+            if (not get(pos))
+                return pos;
+            pos++;
+        }
+        return -1;
+    }
+
     /**
      * @brief get a certain bit.
      * @param pos  index from 0
