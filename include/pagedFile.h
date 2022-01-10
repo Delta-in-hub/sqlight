@@ -8,11 +8,11 @@
 #include <list>
 #include <memory>
 #include <queue>
+#include <robin_hood.h>
 #include <string>
 #include <string_view>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <unordered_map>
 
 namespace PagedFile
 {
@@ -35,10 +35,10 @@ struct PidHash
 {
     size_t operator()(const Pid &p) const
     {
-        auto h1 = std::hash<int>{}(p.fd);
+        auto h1 = robin_hood::hash_int(p.fd);
 
         // https://stackoverflow.com/questions/2590677/how-do-i-combine-hash-values-in-c0x
-        h1 ^= std::hash<int>{}(p.pageNum) + 0x9e3779b9 + (h1 << 6) + (h1 >> 2);
+        h1 ^= robin_hood::hash_int(p.pageNum) + 0x9e3779b9 + (h1 << 6) + (h1 >> 2);
         return h1;
     }
 };
@@ -62,7 +62,8 @@ class PageManager
     Page _page[CACHESIZE];
 
     std::list<Page *> _usedPage;
-    std::unordered_map<Pid, decltype(_usedPage.begin()), PidHash> _hashm;
+
+    robin_hood::unordered_map<Pid, decltype(_usedPage.begin()), PidHash> _hashm;
 
     std::priority_queue<Page *, std::vector<Page *>, std::greater<Page *>> _unusedPage;
 
@@ -85,8 +86,7 @@ class PageManager
     ssize_t readFromDisk(Page *p)
     {
         lseek(p->_id.fd, p->_id.pageNum * PAGESIZE, SEEK_SET);
-        auto nr = read(p->_id.fd, p->_data, PAGESIZE);
-        return nr;
+        return read(p->_id.fd, p->_data, PAGESIZE);
     }
 
   public:
@@ -133,7 +133,10 @@ class PageManager
             ans->_id = p;
             _usedPage.push_front(ans);
             _hashm[p] = _usedPage.begin();
-            readFromDisk(ans);
+            auto nread = readFromDisk(ans);
+            assert(nread == 0 or nread == PAGESIZE);
+            if (nread == 0) //beyond eof
+                memset(ans->_data, 0, PAGESIZE);
         }
         return ans;
     }
@@ -203,17 +206,17 @@ class FileManager
 
   private:
     // ? maybe useless
-    static std::unordered_map<std::string, int> _path2fd;
-    static std::unordered_map<int, std::string> _fd2path;
+    static robin_hood::unordered_map<std::string, int> _path2fd;
+    static robin_hood::unordered_map<int, std::string> _fd2path;
 
   public:
     int getFdByPath(std::string_view path)
     {
-        return _path2fd[path.data()];
+        return _path2fd.at(path.data());
     }
     std::string getPathByFd(int fd)
     {
-        return _fd2path[fd];
+        return _fd2path.at(fd);
     }
     /**
      * @brief check a path is a normal file.

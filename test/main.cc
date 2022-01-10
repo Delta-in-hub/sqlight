@@ -64,6 +64,12 @@ TEST(PagedFile, test)
     // printHex(page->_data, 32);
     page->_dirty = true;
 
+    auto page2 = pm.getPage({fd, 2});
+
+    page2->_data[1] = 0x11;
+    page2->_data[2] = 0xff;
+    page2->_dirty = true;
+
     fm.closeFile(fd, pm);
 
     EXPECT_TRUE(not fm.isFile(path).empty());
@@ -74,6 +80,11 @@ TEST(PagedFile, test)
     char buf[4096];
     memset(buf, 1, 4096);
     EXPECT_TRUE(memcmp(page->_data, buf, 4096) == 0);
+
+    page2 = pm.getPage({fd, 2});
+    EXPECT_EQ(page2->_data[1], 0x11);
+    EXPECT_EQ(page2->_data[2], 0xff);
+    EXPECT_EQ(page2->_data[3], 0x00);
 
     fm.closeFile(fd, pm);
 

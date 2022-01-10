@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 include_directories(include)
 
 add_subdirectory(extern/fmt)
+add_subdirectory(extern/robin_hood)
 
 if(WIN32)
   set(thread "")
@@ -16,7 +17,7 @@ endif(WIN32)
 
 
 add_executable(sqlightcli main.cc src/bitwise.cc src/utf8.cc)
-target_link_libraries(sqlightcli fmt::fmt ${thread})
+target_link_libraries(sqlightcli fmt::fmt ${thread} robin_hood)
 
 
 enable_testing()
@@ -34,4 +35,5 @@ target_link_libraries(
   gtest_main
   fmt::fmt
   ${thread}
+  robin_hood
 )
