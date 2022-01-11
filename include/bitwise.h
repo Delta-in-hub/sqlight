@@ -61,20 +61,34 @@ class BitMap
     }
 
     /**
-     * @brief get the first position of (bit == 0) from pos
+     * @brief get the first position of (bit == value) from pos
      *
      * @param pos start position inclusve
      * @return if all bit is 1, return UINTMAX(-1), else return position
      */
-    uint32_t nextBit(uint32_t pos = 0)
+    uint32_t nextBit(uint32_t pos = 0, bool value = false)
     {
         while (pos < _sizeInBytes * BYTEINBITS)
         {
-            if (not get(pos))
+            if (get(pos) == value)
                 return pos;
             pos++;
         }
         return -1;
+    }
+
+    bool testAll(bool value = false) const
+    {
+        const uint8_t _value = (value == true) ? 0xff : 0x00;
+        const uint8_t *_start = _data;
+        const uint8_t *_end = _data + _sizeInBytes;
+        while (_start != _end)
+        {
+            if (*_start != _value)
+                return false;
+            ++_start;
+        }
+        return true;
     }
 
     /**

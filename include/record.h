@@ -3,6 +3,7 @@
 
 #include "bitwise.h"
 #include "pagedFile.h"
+#include <iterator>
 // Record Manager
 namespace RecordMgr
 {
@@ -28,6 +29,10 @@ struct Rid
     int _fd; // ? maybe useless ?
     uint32_t _page;
     uint32_t _slot;
+    bool operator==(Rid other) const
+    {
+        return std::tie(_fd, _page, _slot) == std::tie(other._fd, other._page, other._slot);
+    }
 };
 
 /**
@@ -147,11 +152,17 @@ class RecordManager
     bool isRecord(Rid r) const
     {
         auto p = _pm->getPage({r._fd, r._page});
-        auto ph = reinterpret_cast<PageHeader *>(p->_data);
         auto bm = BitMap(p->_data + sizeof(PageHeader), ceil(_th._slotsPerPage, BYTEINBITS));
         return bm.get(r._slot);
     }
 
+    // read only
+    const uint8_t *getRecordPointer(Rid r) const
+    {
+        return readSlot(r);
+    }
+
+    // get record copy
     std::unique_ptr<uint8_t[]> getRecord(Rid r) const
     {
         auto ptr = std::make_unique<uint8_t[]>(_th._recordSize);
@@ -202,10 +213,103 @@ class RecordManager
     {
         return _pm;
     }
-};
 
-class RecordIterator
-{
+    class Iterator
+    {
+      private:
+        Rid _r;
+        const RecordManager *_rm;
+
+      public:
+        Iterator() = delete;
+        Iterator(const RecordManager *rm, Rid r) : _rm(rm), _r(r)
+        {
+        }
+        Iterator &operator++()
+        {
+            auto p = _rm->getPageManager()->getPage({_r._fd, _r._page});
+            auto bm = BitMap(p->_data + sizeof(PageHeader), ceil(_rm->_th._recordSize, BYTEINBITS));
+            auto pos = bm.nextBit(_r._slot + 1, true);
+            if (pos < _rm->_th._slotsPerPage)
+            {
+                _r._slot = pos;
+            }
+            else
+            {
+                if (_r._page == _rm->_th._existsPageNum)
+                {
+                    // end of all record
+                    _r._slot = -1;
+                }
+                else
+                {
+                    auto npid = _r._page;
+                    while (++npid <= _rm->_th._existsPageNum)
+                    {
+                        auto npage = _rm->getPageManager()->getPage({_r._fd, npid});
+                        auto nbm = BitMap(npage->_data + sizeof(PageHeader), ceil(_rm->_th._recordSize, BYTEINBITS));
+                        auto npos = nbm.nextBit(0, true);
+                        if (npos < _rm->_th._existsPageNum)
+                        {
+                            _r._page = npid;
+                            _r._slot = pos;
+                            break;
+                        }
+                        else if (npid == _rm->_th._existsPageNum)
+                        {
+                            _r._page = npid;
+                            _r._slot = -1;
+                            break;
+                        }
+                    }
+                }
+            }
+            return *this;
+        }
+        Iterator operator++(int) const
+        {
+            Iterator it(_rm, _r);
+            return ++it;
+        };
+        bool operator==(Iterator other) const
+        {
+            return _r == other._r;
+        }
+        bool operator!=(Iterator other) const
+        {
+            return not(*this == other);
+        }
+
+        const uint8_t *operator*() const
+        {
+            return _rm->readSlot(_r);
+        }
+    };
+
+    Iterator cbegin() const
+    {
+        Rid r;
+        r._fd = _fd;
+        r._page = 1;
+        r._slot = 0;
+        auto it = Iterator(this, r);
+        if (isRecord(r))
+        {
+            return it;
+        }
+        else
+        {
+            return ++it;
+        }
+    }
+    Iterator cend() const
+    {
+        Rid r;
+        r._fd = _fd;
+        r._page = _th._existsPageNum;
+        r._slot = -1;
+        return Iterator(this, r);
+    }
 };
 
 // sizeof(bitmap) = ceil(n/8) = (n + 8 - 1)/8
