@@ -3,7 +3,6 @@
 
 #include "bitwise.h"
 #include "pagedFile.h"
-#include <iterator>
 // Record Manager
 namespace RecordMgr
 {
@@ -80,7 +79,7 @@ class RecordManager
         else
         {
             // this page is full
-            auto npid = rid._page;
+            auto npid = _th._nextPage; // bug fixed
             while (true)
             {
                 auto np = _pm->getPage({_fd, ++npid});
@@ -116,6 +115,7 @@ class RecordManager
 
     const uint8_t *readSlot(Rid r) const
     {
+        assert(r._page >= 1);
         auto p = _pm->getPage({r._fd, r._page});
         auto ph = reinterpret_cast<PageHeader *>(p->_data);
         auto bm = BitMap(p->_data + sizeof(PageHeader), ceil(_th._slotsPerPage, BYTEINBITS));
@@ -127,8 +127,8 @@ class RecordManager
 
     void writeSlot(Rid r, const uint8_t *data)
     {
+        assert(r._page >= 1);
         auto p = _pm->getPage({r._fd, r._page});
-        auto ph = reinterpret_cast<PageHeader *>(p->_data);
         auto bm = BitMap(p->_data + sizeof(PageHeader), ceil(_th._slotsPerPage, BYTEINBITS));
         assert(bm.get(r._slot));
         uint8_t *pointer =
@@ -171,10 +171,10 @@ class RecordManager
         return ptr;
     }
 
-    Rid insertRecord(const uint8_t *data)
+    Rid insertRecord(const void *data)
     {
         auto rid = getFreeSlot();
-        writeSlot(rid, data);
+        writeSlot(rid, static_cast<const uint8_t *>(data));
         return rid;
     }
 
@@ -183,9 +183,9 @@ class RecordManager
         deleteSlot(r);
     }
 
-    void updateRecord(Rid r, const uint8_t *data)
+    void updateRecord(Rid r, const void *data)
     {
-        writeSlot(r, data);
+        writeSlot(r, static_cast<const uint8_t *>(data));
     }
 
     void flush(uint32_t pageNum, bool release = false)
@@ -236,7 +236,7 @@ class RecordManager
             }
             else
             {
-                if (_r._page == _rm->_th._existsPageNum)
+                if (_r._page == _rm->_th._existsPageNum) // bug fixed
                 {
                     // end of all record
                     _r._slot = -1;
@@ -252,7 +252,7 @@ class RecordManager
                         if (npos < _rm->_th._existsPageNum)
                         {
                             _r._page = npid;
-                            _r._slot = pos;
+                            _r._slot = npos; // bug fixed
                             break;
                         }
                         else if (npid == _rm->_th._existsPageNum)
@@ -280,6 +280,11 @@ class RecordManager
             return not(*this == other);
         }
 
+        Rid getRid() const
+        {
+            return _r;
+        }
+
         const uint8_t *operator*() const
         {
             return _rm->readSlot(_r);
@@ -288,10 +293,13 @@ class RecordManager
 
     Iterator cbegin() const
     {
+        if (_th._existsPageNum == 0)
+            return cend();
         Rid r;
         r._fd = _fd;
         r._page = 1;
         r._slot = 0;
+
         auto it = Iterator(this, r);
         if (isRecord(r))
         {

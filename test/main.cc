@@ -2,6 +2,7 @@
 #include "fmt/color.h"
 #include "fmt/format.h"
 #include "pagedFile.h"
+#include "record.h"
 #include <ciso646>
 #include <gtest/gtest.h>
 #include <thread>
@@ -90,6 +91,153 @@ TEST(PagedFile, test)
 
     fm.deleteFile(path);
     EXPECT_TRUE(fm.isFile(path).empty());
+}
+
+TEST(RecordManger, create)
+{
+    char path[] = "./gtestRecordTest中文💖😂.recordbin";
+
+    struct record
+    {
+        char name[300];
+        int age;
+        int id;
+        double fnum;
+    } temp;
+
+    char buf[4096];
+    auto fun = [](int cnt, char *dest) {
+        std::string s(cnt, 'a');
+        strcpy(dest, s.data());
+    };
+
+    temp.age = 0;
+    temp.fnum = 0;
+    temp.id = 0;
+    fun(temp.age + 1, temp.name);
+    // using namespace RecordMgr;
+    auto rf = RecordMgr::RecordFileManager();
+    auto rm = rf.creatTable(path, sizeof(record));
+    int cnt = 0;
+    for (auto i = rm.cbegin(); i != rm.cend(); ++i) // bug
+    {
+        cnt++;
+    }
+    EXPECT_EQ(cnt, 0);
+    for (int i = 0; i < 100; i++)
+    {
+        rm.insertRecord(&temp);
+        temp.age++;
+        temp.fnum++;
+        temp.id++;
+        fun(temp.age + 1, temp.name);
+    }
+    cnt = 0;
+    for (auto i = rm.cbegin(); i != rm.cend(); ++i) // bug
+    {
+        record *p = (record *)*i;
+        EXPECT_EQ(p->age, cnt);
+        EXPECT_EQ(p->fnum, cnt);
+        EXPECT_EQ(p->id, cnt);
+        fun(cnt + 1, buf);
+        EXPECT_EQ(strcmp(p->name, buf), 0);
+        cnt++;
+    }
+    EXPECT_EQ(cnt, 100);
+
+    rf.closeTable(rm);
+}
+
+TEST(RecordManger, open)
+{
+
+    char path[] = "./gtestRecordTest中文💖😂.recordbin";
+
+    struct record
+    {
+        char name[300] = {0};
+        int age;
+        int id;
+        double fnum;
+    } temp;
+
+    char buf[4096];
+    auto fun = [](int cnt, char *dest) {
+        std::string s(cnt, 'a');
+        strcpy(dest, s.data());
+    };
+
+    temp.age = 0;
+    temp.fnum = 0;
+    temp.id = 0;
+    fun(temp.age + 1, temp.name);
+    // using namespace RecordMgr;
+    auto rf = RecordMgr::RecordFileManager();
+    auto rm = rf.openTable(path);
+    int cnt = 0;
+    for (auto i = rm.cbegin(); i != rm.cend(); ++i)
+    {
+        record *p = (record *)*i;
+        EXPECT_EQ(p->age, cnt);
+        EXPECT_EQ(p->fnum, cnt);
+        EXPECT_EQ(p->id, cnt);
+        fun(cnt + 1, buf);
+        EXPECT_EQ(strcmp(p->name, buf), 0);
+
+        rm.updateRecord(i.getRid(), &temp);
+        cnt++;
+    }
+    EXPECT_EQ(cnt, 100);
+    cnt = 0;
+    std::vector<RecordMgr::Rid> del;
+    for (auto i = rm.cbegin(); i != rm.cend(); ++i)
+    {
+        record *p = (record *)*i;
+        EXPECT_TRUE(memcmp(p, &temp, sizeof(temp)) == 0);
+        cnt++;
+        if (cnt % 5 == 0)
+            del.push_back(i.getRid());
+    }
+    EXPECT_EQ(cnt, 100);
+    for (auto &&i : del)
+    {
+        rm.deleteRecord(i);
+    }
+    cnt = 0;
+    for (auto i = rm.cbegin(); i != rm.cend(); ++i)
+    {
+        record *p = (record *)*i;
+        EXPECT_TRUE(memcmp(p, &temp, sizeof(temp)) == 0);
+        cnt++;
+    }
+    EXPECT_EQ(cnt, 100 - del.size());
+    auto ntemp = temp;
+    ntemp.id = 123;
+    ntemp.age = 321;
+    for (auto &&i : del)
+    {
+        rm.insertRecord(&ntemp);
+    }
+    cnt = 0;
+    for (auto i = rm.cbegin(); i != rm.cend(); ++i)
+    {
+        record *p = (record *)*i;
+        cnt++;
+        if (cnt % 5 == 0)
+            EXPECT_TRUE(memcmp(p, &ntemp, sizeof(temp)) == 0);
+        else
+            EXPECT_TRUE(memcmp(p, &temp, sizeof(temp)) == 0);
+    }
+    EXPECT_EQ(cnt, 100);
+    rf.closeTable(rm);
+}
+
+TEST(RecordManger, delete)
+{
+
+    char path[] = "./gtestRecordTest中文💖😂.recordbin";
+    auto rf = RecordMgr::RecordFileManager();
+    rf.deleteTable(path);
 }
 
 int main(int argc, char **argv)

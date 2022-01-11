@@ -77,6 +77,19 @@ class BitMap
         return -1;
     }
 
+    uint32_t count(uint32_t p = 0, bool value = true)
+    {
+
+        uint32_t cnt = 0;
+        while (p < _sizeInBytes * BYTEINBITS)
+        {
+            if (get(p) == value)
+                cnt++;
+            p++;
+        }
+        return cnt;
+    }
+
     bool testAll(bool value = false) const
     {
         const uint8_t _value = (value == true) ? 0xff : 0x00;

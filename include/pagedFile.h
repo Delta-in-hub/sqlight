@@ -183,8 +183,8 @@ class PageManager
 
     void flushAllByFd(int fd, bool release = false)
     {
-        if (FileManager::getPathByFd(fd).empty())
-            return;
+        // if (FileManager::getPathByFd(fd).empty()) //! not found 错误：‘FileManager’未声明
+        // return;
         auto i = _usedPage.begin();
         while (i != _usedPage.end())
         {
