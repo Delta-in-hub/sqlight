@@ -19,23 +19,25 @@ class RecordManager
     PagedFile::PageManager *_pm;
     TableHeader _th;
 
-    void setFileHeader(uint32_t _existsPageNum, uint32_t _nextPage)
+    void setFileHeader(uint32_t _existsPageNum, uint32_t _nextPage, uint32_t totalRecord)
     {
         this->_th._existsPageNum = _existsPageNum;
         this->_th._nextPage = _nextPage;
+        this->_th._totalRecords = totalRecord;
         auto p = _pm->getPage({_fd, 0});
         auto th = reinterpret_cast<TableHeader *>(p->_data);
-        if (th->_existsPageNum != _existsPageNum or th->_nextPage != _nextPage)
+        if (th->_existsPageNum != _existsPageNum or th->_nextPage != _nextPage or th->_totalRecords != totalRecord)
             p->_dirty = true;
         th->_existsPageNum = _existsPageNum;
         th->_nextPage = _nextPage;
+        th->_totalRecords = totalRecord;
     }
 
     Rid getFreeSlot()
     {
         if (_th._existsPageNum == 0 and _th._nextPage == 1)
         {
-            setFileHeader(1, 1);
+            setFileHeader(1, 1, _th._totalRecords);
         }
         Rid rid;
         rid._fd = this->_fd;
@@ -65,12 +67,12 @@ class RecordManager
                     auto bm = BitMap(np->_data + sizeof(PageHeader), ceil(_th._slotsPerPage, BYTEINBITS));
                     bm.set(nph->_nextSlot);
                     nph->_nextSlot = bm.nextBit(nph->_nextSlot + 1);
-                    setFileHeader(std::max(_th._existsPageNum, rid._page), rid._page);
                     np->_dirty = true;
                     break;
                 }
             }
         }
+        setFileHeader(std::max(_th._existsPageNum, rid._page), rid._page, _th._totalRecords + 1);
         return rid;
     }
 
@@ -84,7 +86,7 @@ class RecordManager
         ph->_nextSlot = std::min(ph->_nextSlot, r._slot);
         bm.reset(r._slot);
         p->_dirty = true;
-        setFileHeader(_th._existsPageNum, std::min(_th._nextPage, r._page));
+        setFileHeader(_th._existsPageNum, std::min(_th._nextPage, r._page), _th._totalRecords - 1);
     }
 
     const uint8_t *readSlot(Rid r) const
@@ -176,6 +178,11 @@ class RecordManager
                 _pm->flush(p, release);
             }
         }
+    }
+
+    uint32_t getTotalRecord() const
+    {
+        return _th._totalRecords;
     }
 
     int getFd() const
@@ -330,7 +337,8 @@ class RecordFileManager
         int fd = PagedFile::FileManager::openFile(path);
         auto pm = PagedFile::getPageManager();
         auto page = pm->getPage({fd, 0}); // first page just for header
-        TableHeader th = {._recordSize = recordSize, ._existsPageNum = 0, ._nextPage = 1};
+        TableHeader th = {
+            ._recordSize = recordSize, ._existsPageNum = 0, ._nextPage = FIRSTLOADPAGE, ._totalRecords = 0};
         th._slotsPerPage = calSlotsPerPage(recordSize);
         memcpy(page->_data, &th, sizeof(th));
         page->_dirty = true;

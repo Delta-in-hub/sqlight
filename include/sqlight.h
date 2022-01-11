@@ -18,7 +18,10 @@ struct TableHeader
     uint32_t _existsPageNum; // existed page number in the file exclude first page(header page)
     uint32_t _slotsPerPage;  // record number of one page could have, a slot for a record
     uint32_t _nextPage;      // next page could use
+    uint32_t _totalRecords;  // total exitsted rsecord numbers in the file
 };
+
+constexpr uint32_t FIRSTLOADPAGE = 1; // first page which loads data record
 
 struct PageHeader
 {

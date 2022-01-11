@@ -124,6 +124,8 @@ TEST(RecordManger, create)
         cnt++;
     }
     EXPECT_EQ(cnt, 0);
+    EXPECT_EQ(rm.getTotalRecord(), 0);
+
     for (int i = 0; i < 100; i++)
     {
         rm.insertRecord(&temp);
@@ -133,6 +135,7 @@ TEST(RecordManger, create)
         fun(temp.age + 1, temp.name);
     }
     cnt = 0;
+    EXPECT_EQ(rm.getTotalRecord(), 100);
     for (auto i = rm.cbegin(); i != rm.cend(); ++i) // bug
     {
         record *p = (record *)*i;
@@ -175,6 +178,7 @@ TEST(RecordManger, open)
     auto rf = RecordMgr::RecordFileManager();
     auto rm = rf.openTable(path);
     int cnt = 0;
+    EXPECT_EQ(rm.getTotalRecord(), 100);
     for (auto i = rm.cbegin(); i != rm.cend(); ++i)
     {
         record *p = (record *)*i;
@@ -188,6 +192,7 @@ TEST(RecordManger, open)
         cnt++;
     }
     EXPECT_EQ(cnt, 100);
+    EXPECT_EQ(rm.getTotalRecord(), 100);
     cnt = 0;
     std::vector<Rid> del;
     for (auto i = rm.cbegin(); i != rm.cend(); ++i)
@@ -203,6 +208,7 @@ TEST(RecordManger, open)
     {
         rm.deleteRecord(i);
     }
+    EXPECT_EQ(rm.getTotalRecord(), 100 - del.size());
     cnt = 0;
     for (auto i = rm.cbegin(); i != rm.cend(); ++i)
     {
@@ -211,6 +217,7 @@ TEST(RecordManger, open)
         cnt++;
     }
     EXPECT_EQ(cnt, 100 - del.size());
+    EXPECT_EQ(rm.getTotalRecord(), 100 - del.size());
     auto ntemp = temp;
     ntemp.id = 123;
     ntemp.age = 321;
@@ -229,6 +236,7 @@ TEST(RecordManger, open)
             EXPECT_TRUE(memcmp(p, &temp, sizeof(temp)) == 0);
     }
     EXPECT_EQ(cnt, 100);
+    EXPECT_EQ(rm.getTotalRecord(), 100);
     rf.closeTable(rm);
 }
 
