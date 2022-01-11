@@ -21,7 +21,7 @@ namespace PagedFile
 struct Pid
 {
     int fd;
-    int pageNum;
+    uint32_t pageNum;
     bool operator==(const Pid &other) const
     {
         return std::tie(fd, pageNum) == std::tie(other.fd, other.pageNum);
@@ -87,6 +87,8 @@ class PageManager
     }
 
   public:
+    PageManager(const PageManager &) = delete;
+
     PageManager()
     {
         auto p = aligned_alloc(4096, PAGESIZE * CACHESIZE); // for direct_io
@@ -104,7 +106,12 @@ class PageManager
         flushAll(false);
     }
 
-    Page *getPage(const Pid &p)
+    bool isInCache(Pid p)
+    {
+        return _hashm.count(p);
+    }
+
+    Page *getPage(Pid p)
     {
         Page *ans = nullptr;
         auto pos = _hashm.find(p);
@@ -119,7 +126,7 @@ class PageManager
         {
             if (_unusedPage.empty())
             {
-                flush(_usedPage.back());
+                flush(_usedPage.back(), true);
             }
 
             assert(not _unusedPage.empty());
@@ -141,13 +148,13 @@ class PageManager
     /**
      * @brief write back a page to disk ,maybe remove it from cache
      *
-     * @param del  True for remove it from cache
+     * @param del  True for release it from cache
      * @param p
      */
-    void flush(Page *p, bool del = true)
+    void flush(Page *p, bool release = false)
     {
         writeToDisk(p);
-        if (del)
+        if (release)
         {
             auto pos = _hashm.find(p->_id);
             _usedPage.erase(pos->second);
@@ -156,13 +163,13 @@ class PageManager
         }
     }
 
-    void flushAll(bool del = true)
+    void flushAll(bool release = false)
     {
         for (auto &&i : _usedPage)
         {
             writeToDisk(i);
         }
-        if (del)
+        if (release)
         {
             for (auto &&i : _usedPage)
             {
@@ -174,15 +181,17 @@ class PageManager
         }
     }
 
-    void flushAllByFd(int fd, bool del = true)
+    void flushAllByFd(int fd, bool release = false)
     {
+        if (FileManager::getPathByFd(fd).empty())
+            return;
         auto i = _usedPage.begin();
         while (i != _usedPage.end())
         {
             if ((*i)->_id.fd == fd)
             {
                 writeToDisk(*i);
-                if (del)
+                if (release)
                 {
                     _hashm.erase((*i)->_id);
                     _unusedPage.emplace(*i);
@@ -217,13 +226,21 @@ class FileManager
     static robin_hood::unordered_map<int, std::string> _fd2path;
 
   public:
-    int getFdByPath(std::string_view path)
+    static int getFdByPath(std::string_view path)
     {
-        return _path2fd.at(path.data());
+        auto pos = _path2fd.find(path.data());
+        if (pos == _path2fd.end())
+            return -1;
+        return pos->second;
+        // return _path2fd.at(path.data());
     }
-    std::string getPathByFd(int fd)
+    static std::string getPathByFd(int fd)
     {
-        return _fd2path.at(fd);
+        auto pos = _fd2path.find(fd);
+        if (pos == _fd2path.end())
+            return "";
+        return pos->second;
+        // return _fd2path.at(fd);
     }
     /**
      * @brief check a path is a normal file.
@@ -271,10 +288,11 @@ class FileManager
     {
         auto pos = _fd2path.find(fd);
         assert(pos != _fd2path.end());
-        pm.flushAllByFd(fd);
+        pm.flushAllByFd(fd, true);
+
+        close(fd);
         _path2fd.erase(pos->second);
         _fd2path.erase(pos);
-        close(fd);
     }
     static void createFile(std::string_view path)
     {

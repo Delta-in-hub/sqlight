@@ -37,7 +37,7 @@ class BitMap
 {
   private:
     uint8_t *_data;
-    const unsigned _sizeInBytes;
+    unsigned _sizeInBytes;
     int _whichByte(int pos) const
     {
         return pos / BYTEINBITS;

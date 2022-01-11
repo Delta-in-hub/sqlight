@@ -70,6 +70,7 @@ class RecordManager
             rid._slot = ph->_nextSlot;
             bm.set(rid._slot);
             ph->_nextSlot = bm.nextBit(ph->_nextSlot + 1);
+            p->_dirty = true;
         }
         else
         {
@@ -87,15 +88,28 @@ class RecordManager
                     bm.set(nph->_nextSlot);
                     nph->_nextSlot = bm.nextBit(nph->_nextSlot + 1);
                     setFileHeader(std::max(_th._existsPageNum, rid._page), rid._page);
+                    np->_dirty = true;
                     break;
                 }
             }
         }
-        p->_dirty = true;
         return rid;
     }
 
-    const uint8_t *readSlot(Rid r)
+    // ?? need to shrink to fit
+    void deleteSlot(Rid r)
+    {
+        auto p = _pm->getPage({r._fd, r._page});
+        auto ph = reinterpret_cast<PageHeader *>(p->_data);
+        auto bm = BitMap(p->_data + sizeof(PageHeader), ceil(_th._slotsPerPage, BYTEINBITS));
+        assert(bm.get(r._slot));
+        ph->_nextSlot = std::min(ph->_nextSlot, r._slot);
+        bm.reset(r._slot);
+        p->_dirty = true;
+        setFileHeader(_th._existsPageNum, std::min(_th._nextPage, r._page));
+    }
+
+    const uint8_t *readSlot(Rid r) const
     {
         auto p = _pm->getPage({r._fd, r._page});
         auto ph = reinterpret_cast<PageHeader *>(p->_data);
@@ -119,39 +133,74 @@ class RecordManager
     }
 
   public:
+    RecordManager() = delete;
     RecordManager(int fd, PagedFile::PageManager *pm, TableHeader th) : _pm(pm), _fd(fd), _th(th)
     {
         ;
     }
 
-    bool isRecord(Rid r)
+    // shoudl call RecordFileManager::closeTable(*this);
+    ~RecordManager()
     {
+    }
+
+    bool isRecord(Rid r) const
+    {
+        auto p = _pm->getPage({r._fd, r._page});
+        auto ph = reinterpret_cast<PageHeader *>(p->_data);
+        auto bm = BitMap(p->_data + sizeof(PageHeader), ceil(_th._slotsPerPage, BYTEINBITS));
+        return bm.get(r._slot);
     }
 
     std::unique_ptr<uint8_t[]> getRecord(Rid r) const
     {
-        auto ptr = std::make_unique<uint8_t[]>(123);
+        auto ptr = std::make_unique<uint8_t[]>(_th._recordSize);
+        auto p = readSlot(r);
+        memcpy(ptr.get(), p, _th._recordSize);
         return ptr;
     }
 
-    Rid insertRecord(const uint8_t *data, uint32_t size)
+    Rid insertRecord(const uint8_t *data)
     {
-        assert(size >= _th._recordSize);
+        auto rid = getFreeSlot();
+        writeSlot(rid, data);
+        return rid;
     }
 
     void deleteRecord(Rid r)
     {
-        ;
+        deleteSlot(r);
     }
 
     void updateRecord(Rid r, const uint8_t *data)
     {
-        ;
+        writeSlot(r, data);
     }
 
-    void flush()
+    void flush(uint32_t pageNum, bool release = false)
     {
-        ;
+        if (pageNum == -1)
+        {
+            _pm->flushAllByFd(_fd, release);
+        }
+        else
+        {
+            if (_pm->isInCache({_fd, pageNum}))
+            {
+                auto p = _pm->getPage({_fd, pageNum});
+                _pm->flush(p, release);
+            }
+        }
+    }
+
+    int getFd() const
+    {
+        return _fd;
+    }
+
+    PagedFile::PageManager *getPageManager() const
+    {
+        return _pm;
     }
 };
 
@@ -186,7 +235,7 @@ class RecordFileManager
     }
     static void closeTable(RecordManager &rm)
     {
-        ;
+        PagedFile::FileManager::closeFile(rm.getFd(), *(rm.getPageManager()));
     }
     static RecordManager creatTable(std::string_view path, uint32_t recordSize)
     {
