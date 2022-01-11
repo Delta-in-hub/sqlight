@@ -18,16 +18,6 @@
 namespace PagedFile
 {
 
-struct Pid
-{
-    int fd;
-    uint32_t pageNum;
-    bool operator==(const Pid &other) const
-    {
-        return std::tie(fd, pageNum) == std::tie(other.fd, other.pageNum);
-    }
-};
-
 struct PidHash
 {
     size_t operator()(const Pid &p) const

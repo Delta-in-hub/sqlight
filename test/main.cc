@@ -189,7 +189,7 @@ TEST(RecordManger, open)
     }
     EXPECT_EQ(cnt, 100);
     cnt = 0;
-    std::vector<RecordMgr::Rid> del;
+    std::vector<Rid> del;
     for (auto i = rm.cbegin(); i != rm.cend(); ++i)
     {
         record *p = (record *)*i;

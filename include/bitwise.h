@@ -90,19 +90,20 @@ class BitMap
         return cnt;
     }
 
-    bool testAll(bool value = false) const
-    {
-        const uint8_t _value = (value == true) ? 0xff : 0x00;
-        const uint8_t *_start = _data;
-        const uint8_t *_end = _data + _sizeInBytes;
-        while (_start != _end)
-        {
-            if (*_start != _value)
-                return false;
-            ++_start;
-        }
-        return true;
-    }
+    // // useless
+    // bool testAll(bool value = false) const 
+    // {
+    //     const uint8_t _value = (value == true) ? 0xff : 0x00;
+    //     const uint8_t *_start = _data;
+    //     const uint8_t *_end = _data + _sizeInBytes;
+    //     while (_start != _end)
+    //     {
+    //         if (*_start != _value)
+    //             return false;
+    //         ++_start;
+    //     }
+    //     return true;
+    // }
 
     /**
      * @brief get a certain bit.

@@ -3,36 +3,10 @@
 
 #include "bitwise.h"
 #include "pagedFile.h"
+#include "sqlight.h"
 // Record Manager
 namespace RecordMgr
 {
-
-struct TableHeader
-{
-    uint32_t _recordSize;    // a record size in byte
-    uint32_t _existsPageNum; // existed page number in the file exclude first page(header page)
-    uint32_t _slotsPerPage;  // record number of one page could have, a slot for a record
-    uint32_t _nextPage;      // next page could use
-};
-
-struct PageHeader
-{
-    // uint32_t _existsRecordNum;
-    uint32_t _nextSlot;
-};
-
-constexpr uint32_t MAXRECORDSIZE = 4096 - sizeof(PageHeader) - 1;
-
-struct Rid
-{
-    int _fd; // ? maybe useless ?
-    uint32_t _page;
-    uint32_t _slot;
-    bool operator==(Rid other) const
-    {
-        return std::tie(_fd, _page, _slot) == std::tie(other._fd, other._page, other._slot);
-    }
-};
 
 /**
  * @brief Record manager of a table
